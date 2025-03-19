@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dane z Czujników (Temperatura, Wilgotność & Gazy)</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stompjs/lib/stomp.min.js"></script>
+
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+
+    <style>
+        body {
+            background-color: #121212;
+            color: white;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        h1 {
+            text-align: center;
+            margin-top: 30px;
+            color: #32CD32;
+            animation: slideIn 1s ease-out;
+        }
+
+        h2 {
+            color: #32CD32;
+            display: flex;
+            align-items: center;
+            font-size: 1.6em;
+            margin-bottom: 15px;
+            animation: fadeIn 1s ease-out;
+        }
+
+        h2 i {
+            margin-right: 10px;
+        }
+
+        .sample-selection {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 20px;
+        }
+
+        .sample-label {
+            color: #32CD32;
+            margin-bottom: 5px;
+            animation: fadeIn 1s ease-out;
+        }
+
+        .select-container {
+            margin-bottom: 20px;
+        }
+
+        .sample-select {
+            padding: 5px;
+            background-color: #333;
+            color: white;
+            border: 1px solid #444;
+            border-radius: 4px;
+        }
+
+        .prediction-button,
+        .load-button{
+            padding: 10px 20px;
+            background-color: #32CD32;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            color: black;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+
+        .prediction-button:hover,
+        .load-button:hover {
+            background-color: #28a745;
+        }
+
+        .chart-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr; /* Two charts in each row */
+            gap: 20px;
+            justify-items: center;
+            margin-top: 30px;
+        }
+
+        .chart-box {
+            width: 100%;
+            max-width: 600px; /* Max width for larger charts */
+            background-color: #1e1e1e;
+            padding: 15px;
+            border-radius: 8px;
+            animation: fadeIn 1s ease-out;
+        }
+
+        .chart-box div {
+            margin: 10px 0;
+            font-size: 1.2em;
+        }
+
+        .chart-box .value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #32CD32;
+            animation: fadeIn 1s ease-out;
+        }
+
+        .chart-box .gradient {
+            border-radius: 4px;
+        }
+
+        canvas {
+            background-color: #222;
+            border-radius: 4px;
+            height: 300px; /* Height to make the charts larger */
+            width: 100% !important;
+        }
+
+        /* Animation for fade in */
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        /* Animation for slide-in effect */
+        @keyframes slideIn {
+            from {
+                transform: translateY(-50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        /* Custom icons for each section */
+        .icon {
+            font-size: 40px;
+            color: #32CD32;
+            margin-right: 15px;
+            animation: bounce 1s ease-out infinite alternate;
+        }
+
+        /* Animation for bouncing icon */
+        @keyframes bounce {
+            0% {
+                transform: translateY(0);
+            }
+            50% {
+                transform: translateY(-10px);
+            }
+            100% {
+                transform: translateY(0);
+            }
+        }
+
+    </style>
+
+</head>
+<body>
+<h1>Dane z Czujników</h1>
+
+
+<div style="text-align: center; margin: 20px;">
+    <div id="airQualityState" style="display: inline-block; text-align: center; font-size: 1.5em; margin: 20px 0; padding: 10px; border: 2px solid #32CD32; border-radius: 8px; color: #32CD32;">
+        <strong>Zanieczyszczenie (0-10):</strong> <span id="airQualityValue">--</span><br>
+        <strong>Stan powietrza:</strong> <span id="airQualityDescription">--</span>
+    </div>
+</div>
+
+
+<div class="sample-selection">
+    <label for="sampleSize" class="sample-label">Wybierz liczbę próbek:</label>
+    <div class="select-container">
+        <select id="sampleSize" class="sample-select">
+            <option value="100">100 próbek</option>
+            <option value="1000">1000 próbek</option>
+            <option value="10000">10000 próbek</option>
+        </select>
+    </div>
+    <button id="loadData" class="load-button">Załaduj Dane</button>
+</div>
+
+<div class="chart-container">
+    <div class="chart-box">
+        <h2><i class="fas fa-thermometer-half icon"></i>Temperatura (°C) - czujnik DHT22</h2>
+        <div id="currentTemperature" class="value">Aktualna temperatura: -- °C</div>
+        <div id="avgTemperature">Średnia temperatura: -- °C</div>
+        <div id="maxTemperature">Maksymalna temperatura: -- °C</div>
+        <button class="prediction-button" data-sensor="temperature" data-time="30min">Predykcja 30 minut</button>
+        <button class="prediction-button" data-sensor="temperature" data-time="4h">Predykcja 4 godziny</button>
+        <canvas id="temperatureChart"></canvas>
+    </div>
+
+    <div class="chart-box">
+        <h2><i class="fas fa-tint icon"></i>Wilgotność (%) - czujnik DHT22</h2>
+        <div id="currentHumidity" class="value">Aktualna wilgotność: -- %</div>
+        <div id="avgHumidity">Średnia wilgotność: -- %</div>
+        <div id="maxHumidity">Maksymalna wilgotność: -- %</div>
+        <button class="prediction-button" data-sensor="humidity" data-time="30min">Predykcja 30 minut</button>
+        <button class="prediction-button" data-sensor="humidity" data-time="4h">Predykcja 4 godziny</button>
+        <canvas id="humidityChart"></canvas>
+    </div>
+
+    <div class="chart-box">
+        <h2><i class="fas fa-smog icon"></i>Poziomy CO - czujnik MQ135 (ppm)</h2>
+        <div id="currentCO" class="value">Aktualny CO: -- ppm</div>
+        <div id="avgCO">Średni CO: -- ppm</div>
+        <div id="maxCO">Maksymalny CO: -- ppm</div>
+        <canvas id="coChart"></canvas>
+    </div>
+
+    <div class="chart-box">
+        <h2><i class="fas fa-gas-pump icon"></i>Poziomy LPG - czujnik MQ2 (ppm)</h2>
+        <div id="currentLPG" class="value">Aktualny LPG: -- ppm</div>
+        <div id="avgLPG">Średni LPG: -- ppm</div>
+        <div id="maxLPG">Maksymalny LPG: -- ppm</div>
+        <canvas id="lpgChart"></canvas>
+    </div>
+
+    <div class="chart-box">
+        <h2><i class="fas fa-random icon"></i>Wykres drgań - czujnik SW420 (0 = brak, 1 = wykryto)</h2>
+        <div id="currentSW420" class="value">Aktualny stan drgań: --</div>
+        <canvas id="sw420Chart"></canvas>
+    </div>
+
+    <div class="chart-box">
+        <h2><i class="fas fa-cloud icon"></i>Stężenie PM2.5 (µg/m³)</h2>
+        <div id="currentPM25" class="value">Aktualne PM2.5: -- µg/m³</div>
+        <div id="avgPM25">Średnie PM2.5: -- µg/m³</div>
+        <div id="maxPM25">Maksymalne PM2.5: -- µg/m³</div>
+        <button class="prediction-button" data-sensor="pm2.5" data-time="30min">Predykcja 30 minut</button>
+        <button class="prediction-button" data-sensor="pm2.5" data-time="4h">Predykcja 4 godziny</button>
+        <canvas id="pmChart"></canvas>
+    </div>
+
+</div>
+
+<script>
+    let temperatureChart, humidityChart, coChart, lpgChart, sw420Chart, pmChart;
+    let timestamps = [];
+    let temperatureData = [];
+    let humidityData = [];
+    let lpgData = [];
+    let coData = [];
+    let sw420Data = [];
+    let pm25Data = [];
+    function formatSimpleDate(timestamp) {
+        const date = new Date(timestamp);
+        return date.toLocaleString('pl-PL', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        }).replace(',', '');
+    }
+
+    function updateStatistics() {
+        const avgTemp = (temperatureData.reduce((acc, val) => acc + val, 0) / temperatureData.length).toFixed(2);
+        const maxTemp = Math.max(...temperatureData).toFixed(2);
+        const avgHumidity = (humidityData.reduce((acc, val) => acc + val, 0) / humidityData.length).toFixed(2);
+        const maxHumidity = Math.max(...humidityData).toFixed(2);
+        const avgCo = (coData.reduce((acc, val) => acc + val, 0) / coData.length).toFixed(2);
+        const maxCo = Math.max(...coData).toFixed(2);
+        const avgLPG = (lpgData.reduce((acc, val) => acc + val, 0) / lpgData.length).toFixed(2);
+        const maxLPG = Math.max(...lpgData).toFixed(2);
+        const avgPM = (pm25Data.reduce((acc, val) => acc + val, 0) / pm25Data.length).toFixed(2);
+        const maxPM = Math.max(...pm25Data).toFixed(2);
+
+        document.getElementById('avgTemperature').textContent = `Średnia temperatura: ${avgTemp} °C`;
+        document.getElementById('maxTemperature').textContent = `Maksymalna temperatura: ${maxTemp} °C`;
+
+        document.getElementById('avgHumidity').textContent = `Średnia wilgotność: ${avgHumidity} %`;
+        document.getElementById('maxHumidity').textContent = `Maksymalna wilgotność: ${maxHumidity} %`;
+
+        document.getElementById('avgCO').textContent = `Średni CO: ${avgCo} ppm`;
+        document.getElementById('maxCO').textContent = `Maksymalny CO: ${maxCo} ppm`;
+
+        document.getElementById('avgLPG').textContent = `Średni LPG: ${avgLPG} ppm`;
+        document.getElementById('maxLPG').textContent = `Maksymalny LPG: ${maxLPG} ppm`;
+
+        document.getElementById('avgPM25').textContent = `Średni PM2.5: ${avgPM} µg/m³`;
+        document.getElementById('maxPM25').textContent = `Maksymalny PM2.5: ${maxPM} µg/m³`;
+    }
+
+    function loadData(sampleSize) {
+        fetch(`/api/sensor-data/dht22?size=${sampleSize}`)
+            .then(response => response.json())
+            .then(data => {
+                const labels_temperature_chart = data.map(d => formatSimpleDate(d.timestamp));
+                const labels_humidity_chart = data.map(d => formatSimpleDate(d.timestamp));
+                temperatureData = data.map(d => d.temperature);
+                humidityData = data.map(d => d.humidity);
+                timestamps = data.map(d => d.timestamp);
+
+                updateStatistics();
+
+                if (temperatureChart) temperatureChart.destroy();
+                if (humidityChart) humidityChart.destroy();
+
+                const tempCtx = document.getElementById('temperatureChart').getContext('2d');
+                temperatureChart = new Chart(tempCtx, {
+                    type: 'line',
+                    data: {
+                        labels: labels_temperature_chart,
+                        datasets: [{
+                            label: 'Temperatura (°C)',
+                            data: temperatureData,
+                            borderColor: 'rgba(255, 99, 132, 1)',
+                            backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                            fill: true,
+                            tension: 0.1
+                        }]
+                    },
+                    options: {
+                        scales: { x: { display: true }, y: { display: true, beginAtZero: true } }
+                    }
+                });
+
+                const humCtx = document.getElementById('humidityChart').getContext('2d');
+                humidityChart = new Chart(humCtx, {
+                    type: 'line',
+                    data: {
+                        labels: labels_humidity_chart,
+                        datasets: [{
+                            label: 'Wilgotność (%)',
+                            data: humidityData,
+                            borderColor: 'rgba(54, 162, 235, 1)',
+                            backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                            fill: true,
+                            tension: 0.1
+                        }]
+                    },
+                    options: {
+                        scales: { x: { display: true }, y: { display: true, beginAtZero: true } }
+                    }
+                });
+            })
+            .catch(error => console.error('Błąd podczas pobierania danych z DHT22:', error));
+
+        fetch(`/api/sensor-data/mq135?size=${sampleSize}`)
+            .then(response => response.json())
+            .then(data => {
+                const labels = data.map(d => formatSimpleDate(d.timestamp));
+                coData = data.map(d => d.coPpm);
+                timestamps = data.map(d => d.timestamp);
+                updateStatistics();
+
+                if (coChart) {
+                    coChart.destroy();
+                }
+
+                const coCtx = document.getElementById('coChart').getContext('2d');
+                coChart = new Chart(coCtx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'CO (ppm)',
+                            data: coData,
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                            fill: true,
+                            tension: 0.1
+                        }]
+                    },
+                    options: {
+                        scales: { x: { display: true }, y: { display: true, beginAtZero: true } }
+                    }
+                });
+            })
+            .catch(error => console.error('Błąd podczas pobierania danych z MQ135:', error));
+
+        // Wykres LPG
+        fetch(`/api/sensor-data/mq2?size=${sampleSize}`)
+            .then(response => response.json())
+            .then(data => {
+                const labels = data.map(d => formatSimpleDate(d.timestamp));
+                lpgData = data.map(d => d.lpgPpm);
+                timestamps = data.map(d => d.timestamp);
+                updateStatistics();
+
+                if (lpgChart) lpgChart.destroy();
+
+                const lpgCtx = document.getElementById('lpgChart').getContext('2d');
+
+                // Stworzenie gradientu
+                const gradient = lpgCtx.createLinearGradient(0, 0, 0, 400);
+                gradient.addColorStop(0, 'rgba(138, 43, 226, 0.8)');  // Dark purple
+                gradient.addColorStop(1, 'rgba(255, 105, 180, 0.3)'); // Pink
+
+                lpgChart = new Chart(lpgCtx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'LPG (ppm)',
+                            data: lpgData,
+                            borderColor: 'rgba(138, 43, 226, 1)', // Dark purple for line color
+                            backgroundColor: gradient,            // Gradient fill
+                            fill: true,
+                            tension: 0.1
+                        }]
+                    },
+                    options: {
+                        scales: { x: { display: true }, y: { display: true, beginAtZero: true } }
+                    }
+                });
+            })
+            .catch(error => console.error('Błąd podczas pobierania danych z MQ2:', error));
+        fetch(`/api/sensor-data/sw420?size=${sampleSize}`)
+            .then(response => response.json())
+            .then(data => {
+                const labels = data.map(d => formatSimpleDate(d.timestamp)); // Formatowanie dat na etykiety osi X
+                const sw420Data = data.map(d => Number(d.occurred)); // Pobieranie wartości stanu (0 lub 1)
+
+                if (sw420Chart) sw420Chart.destroy(); // Zniszczenie poprzedniego wykresu, jeśli istnieje
+
+                // Kontekst do rysowania wykresu
+                const sw420Ctx = document.getElementById('sw420Chart').getContext('2d');
+
+                // Tworzenie wykresu liniowego
+                sw420Chart = new Chart(sw420Ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Stan SW420 (0=brak, 1=wykryto)',
+                            data: sw420Data,
+                            borderColor: 'rgba(255, 159, 64, 1)',
+                            backgroundColor: 'rgba(255, 159, 64, 0.2)',
+                            fill: false,
+                            stepped: true,  // Typ schodkowy
+                            pointRadius: 5,
+                            pointBackgroundColor: 'rgba(255, 159, 64, 1)',
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            x: {
+                                type: 'category',
+                                display: true,
+                                title: {
+                                    display: true,
+                                    text: 'Czas'
+                                }
+                            },
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    stepSize: 1,
+                                    min: 0,
+                                    max: 1,
+                                },
+                                title: {
+                                    display: true,
+                                    text: 'Stan SW420'
+                                }
+                            }
+                        }
+                    }
+                });
+            })
+            .catch(error => console.error('Błąd podczas pobierania danych z SW420:', error));
+
+        fetch(`/api/sensor-data/pm?size=${sampleSize}`)
+            .then(response => response.json())
+            .then(data => {
+                const labels = data.map(d => formatSimpleDate(d.timestamp));
+                pm25Data = data.map(d => d.dustValue);
+
+                if (pmChart) pmChart.destroy();
+
+                const pmCtx = document.getElementById('pmChart').getContext('2d');
+
+                // Tworzymy gradient dla zielonego tła
+                const gradient = pmCtx.createLinearGradient(0, 0, 0, 400);
+                gradient.addColorStop(0, 'rgba(0, 255, 0, 0.6)'); // Zielony na górze
+                gradient.addColorStop(1, 'rgba(0, 128, 0, 0.1)'); // Półprzezroczysty zielony na dole
+
+                pmChart = new Chart(pmCtx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'PM2.5 (µg/m³)',
+                            data: pm25Data,
+                            borderColor: 'rgba(0, 128, 0, 1)', // Mocny zielony dla linii
+                            backgroundColor: gradient, // Gradient tła
+                            fill: true,
+                            tension: 0.1
+                        }]
+                    },
+                    options: {
+                        scales: {
+                            x: {
+                                display: true
+                            },
+                            y: {
+                                display: true,
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+            })
+            .catch(error => console.error('Błąd podczas pobierania danych PM2.5:', error));
+    }
+
+    document.getElementById('loadData').addEventListener('click', function () {
+        const sampleSize = document.getElementById('sampleSize').value;
+        loadData(sampleSize);
+    });
+
+    window.onload = function () {
+        loadData(100);
+    };
+
+    const socketForSensor = new SockJS('/ws');
+    const stompClientForSensor = Stomp.over(socketForSensor);
+
+    stompClientForSensor.connect({}, function (frame) {
+        console.log('Połączono: ' + frame);
+
+        stompClientForSensor.subscribe('/topic/temperature', function (message) {
+            const newTemperature = parseFloat(message.body); // Sparsuj temperaturę
+            temperatureData.push(newTemperature);
+
+            if (temperatureChart) {
+                temperatureChart.data.labels.push(formatSimpleDate(new Date()));
+                temperatureChart.data.datasets[0].data.push(newTemperature);
+                temperatureChart.update();
+            }
+
+            document.getElementById('currentTemperature').textContent = `Aktualna temperatura: ${newTemperature.toFixed(1)}°C`;
+        });
+
+        stompClientForSensor.subscribe('/topic/humidity', function (message) {
+            const newHumidity = parseFloat(message.body); // Sparsuj wilgotność
+            humidityData.push(newHumidity);
+
+            if (humidityChart) {
+                humidityChart.data.labels.push(formatSimpleDate(new Date()));
+                humidityChart.data.datasets[0].data.push(newHumidity);
+                humidityChart.update();
+            }
+
+            document.getElementById('currentHumidity').textContent = `Aktualna wilgotność: ${newHumidity.toFixed(1)}%`;
+        });
+        stompClientForSensor.subscribe('/topic/mq135', function (message) {
+            const newGasData = JSON.parse(message.body);
+            const newCo = newGasData.coPpm;
+            coData.push(newCo);
+            updateStatistics();
+
+            if (coChart) {
+                coChart.data.labels.push(formatSimpleDate(newGasData.timestamp));
+                coChart.data.datasets[0].data.push(newCo);
+                coChart.update();
+            }
+
+            document.getElementById('currentCO').textContent = `Aktualny CO: ${newCo.toFixed(1)}ppm`;
+        });
+
+
+        stompClientForSensor.subscribe('/topic/mq2', function (message) {
+
+            const newLpgData = JSON.parse(message.body);
+            const newLpg = newLpgData.lpgPpm;
+            lpgData.push(newLpg);
+            updateStatistics();
+
+            if (lpgChart) {
+                lpgChart.data.labels.push(formatSimpleDate(newLpgData.timestamp));
+                lpgChart.data.datasets[0].data.push(newLpg);
+                lpgChart.update();
+            }
+            document.getElementById('currentLPG').textContent = `Aktualny LPG: ${newLpg.toFixed(1)}ppm`;
+        });
+
+        stompClientForSensor.subscribe('/topic/sw420', function (message) {
+            const newSw420Data = JSON.parse(message.body);
+            const newSw420Occurred = parseFloat(newSw420Data.occurred); // Pobieramy wartość z pola 'occurred'
+
+            sw420Data.push(newSw420Occurred);
+            updateStatistics();
+
+            if (sw420Chart) {
+                sw420Chart.data.labels.push(formatSimpleDate(newSw420Data.timestamp));
+                sw420Chart.data.datasets[0].data.push(parseFloat(newSw420Occurred));
+                sw420Chart.update();
+            }
+            // Zaktualizowanie tekstu dla stanu SW420 (0 lub 1)
+            document.getElementById('currentSW420').textContent = `Aktualny stan SW420: ${newSw420Occurred === 1 ? 'Wykryto' : 'Brak'}`;
+        });
+
+        stompClientForSensor.subscribe('/topic/pm', function (message) {
+            const newPMData = JSON.parse(message.body);
+            const newDustValue = parseFloat(newPMData.dustValue);
+
+            pm25Data.push(newDustValue);
+            updateStatistics();
+
+            if (pmChart) {
+                pmChart.data.labels.push(formatSimpleDate(newPMData.timestamp));
+                pmChart.data.datasets[0].data.push(newDustValue);
+                pmChart.update();
+            }
+
+            document.getElementById('currentPM25').textContent = `Aktualne PM2.5: ${newDustValue.toFixed(1)}µg/m³`;
+        });
+
+        stompClientForSensor.subscribe('/topic/fuzzy_result', (message) => {
+            console.log("Odebrano wiadomość:", message.body);
+            updateAirQualityUI(message.body); // Aktualizacja UI z odebranymi danymi
+        });
+
+
+    });
+
+    function updateAirQualityUI(result) {
+        try {
+            const parsedResult = JSON.parse(result); // Parsujemy dane JSON
+            const airQualityValue = parsedResult.AirQuality.toFixed(2); // Zaokrąglenie wartości
+            const airQualityCategory = translateCategory(parsedResult.Category); // Tłumaczenie kategorii
+
+            // Aktualizacja elementów HTML
+            document.getElementById("airQualityValue").textContent = airQualityValue;
+            document.getElementById("airQualityDescription").textContent = airQualityCategory;
+
+            // Zmieniamy kolor ramki i tekstu na podstawie jakości powietrza
+            const airQualityStateElement = document.getElementById("airQualityState");
+            if (parsedResult.Category === "good") {
+                airQualityStateElement.style.color = "#32CD32"; // Zielony
+                airQualityStateElement.style.borderColor = "#32CD32";
+            } else if (parsedResult.Category === "moderate") {
+                airQualityStateElement.style.color = "#FFD700"; // Żółty
+                airQualityStateElement.style.borderColor = "#FFD700";
+            } else if (parsedResult.Category === "bad") {
+                airQualityStateElement.style.color = "#FF4500"; // Pomarańczowy
+                airQualityStateElement.style.borderColor = "#FF4500";
+            } else if (parsedResult.Category === "very_bad") {
+                airQualityStateElement.style.color = "#FF0000"; // Czerwony
+                airQualityStateElement.style.borderColor = "#FF0000";
+            }
+        } catch (error) {
+            console.error("Błąd podczas przetwarzania danych fuzzy:", error);
+        }
+    }
+
+    function translateCategory(category) {
+        const translations = {
+            "good": "dobry",
+            "moderate": "umiarkowany",
+            "bad": "zły",
+            "very_bad": "bardzo zły"
+        };
+        return translations[category] || category; // Jeśli brak tłumaczenia, zwróć oryginalną wartość
+    }
+    // function addPredictionToChart(predictionData) {
+    //     // Konwersja danych predykcji na pary {x, y}
+    //     const predictionPoints = predictionData.map(pred => ({
+    //         x: formatSimpleDate(pred.timestamp),
+    //         y: pred.value
+    //     }));
+    //
+    //     // Usuń istniejącą serię predykcji
+    //     const existingPredictionIndex = temperatureChart.data.datasets.findIndex(dataset => dataset.label === 'Predykcja (°C)');
+    //     if (existingPredictionIndex !== -1) {
+    //         temperatureChart.data.datasets.splice(existingPredictionIndex, 1);
+    //     }
+    //
+    //     // Dodaj dane predykcji
+    //     temperatureChart.data.datasets.push({
+    //         label: 'Predykcja (°C)',
+    //         data: predictionPoints,
+    //         borderColor: 'rgba(75, 192, 192, 1)',
+    //         backgroundColor: 'rgba(75, 192, 192, 0.2)',
+    //         fill: false,
+    //         tension: 0.1,
+    //         borderDash: [5, 5],
+    //     });
+    //
+    //     // Zaktualizuj wykres
+    //     temperatureChart.update();
+    // }
+    //
+    // document.getElementById('predictionButton').addEventListener('click', function () {
+    //     // Ustalenie wartości historySize i futureSteps
+    //     const historySize = 720;  // Odpowiada 30 minutom danych (10 sekund na krok)
+    //     const futureSteps = 180;  // Odpowiada 30 minutom prognozy (10 sekund na krok)
+    //
+    //     // Wywołanie endpointa z parametrami historySize i futureSteps
+    //     fetch(`/api/predict/temperature?historySize=${historySize}&futureSteps=${futureSteps}`)
+    //         .then(response => response.json())
+    //         .then(predictionData => {
+    //             // Dodaj dane predykcji do wykresu
+    //             addPredictionToChart(predictionData);
+    //         })
+    //         .catch(error => console.error('Błąd podczas pobierania danych predykcji:', error));
+    // });
+    function getPredictionParams(time) {
+        if (time === '30min') {
+            return { historySize: 720, futureSteps: 180 }; // 30 minut
+        } else if (time === '4h') {
+            return { historySize: 1440, futureSteps: 720 }; // 2 godziny
+        }
+        throw new Error('Nieprawidłowy czas predykcji');
+    }
+
+    function addPredictionToChart(chart, label, predictionData, color) {
+        const predictionPoints = predictionData.map(pred => ({
+            x: formatSimpleDate(pred.timestamp),
+            y: pred.value
+        }));
+
+        // Usuń wszystkie istniejące serie predykcji (bazujące na label zaczynającym się od 'Predykcja')
+        chart.data.datasets = chart.data.datasets.filter(dataset => !dataset.label.startsWith('Predykcja'));
+
+        // Dodaj nowe dane predykcji
+        chart.data.datasets.push({
+            label: label,
+            data: predictionPoints,
+            borderColor: color,
+            backgroundColor: color.replace('1)', '0.2)'),
+            fill: false,
+            tension: 0.1,
+            borderDash: [5, 5],
+        });
+
+        // Zaktualizuj wykres
+        chart.update();
+    }
+    function handlePrediction(sensorType, time, chart, label, color) {
+        const { historySize, futureSteps } = getPredictionParams(time);
+
+        fetch(`/api/predict/${sensorType}?historySize=${historySize}&futureSteps=${futureSteps}`)
+            .then(response => response.json())
+            .then(predictionData => {
+                addPredictionToChart(chart, label, predictionData, color);
+            })
+            .catch(error => console.error(`Błąd podczas pobierania danych predykcji dla ${sensorType} (${time}):`, error));
+    }
+
+    document.querySelectorAll('.prediction-button').forEach(button => {
+        button.addEventListener('click', () => {
+            const sensorType = button.getAttribute('data-sensor');
+            const time = button.getAttribute('data-time');
+
+            // Dopasowanie wykresu i stylów
+            if (sensorType === 'temperature') {
+                handlePrediction(sensorType, time, temperatureChart, `Predykcja (${time})`, 'rgba(75, 192, 192, 1)');
+            } else if (sensorType === 'humidity') {
+                handlePrediction(sensorType, time, humidityChart, `Predykcja (${time})`, 'rgba(153, 102, 255, 1)');
+            } else if (sensorType === 'pm2.5') {
+                handlePrediction(sensorType, time, pmChart, `Predykcja (${time})`, 'rgba(255, 159, 64, 1)');
+            }
+        });
+    });
+
+
+</script>
+</body>
+</html>

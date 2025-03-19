@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ustaw Alarm</title>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #121212;
+            color: #e0e0e0;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #4caf50;
+        }
+
+        .form-container {
+            max-width: 400px;
+            margin: 0 auto;
+            background: #1e1e1e;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        }
+
+        label {
+            display: block;
+            margin: 10px 0 5px;
+        }
+
+        select, input[type="text"], input[type="email"], input[type="range"] {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            border-radius: 4px;
+            border: 1px solid #4caf50;
+            background: #121212;
+            color: #e0e0e0;
+        }
+
+        .range-label {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .current-level {
+            text-align: center;
+            margin: 10px 0;
+            font-weight: bold;
+            color: #4caf50;
+        }
+
+        button {
+            width: 100%;
+            padding: 10px;
+            background: #4caf50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background: #45a049;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Ustaw Alarm</h1>
+
+<div class="form-container">
+    <form id="alarmForm">
+        <label for="alarmType">Rodzaj Alarmu:</label>
+        <select id="alarmType" name="alarmType" autocomplete="off">
+            <option value="TEMPERATURE">Temperatura</option>
+            <option value="HUMIDITY">Wilgotność</option>
+            <option value="LPG">Skroplony gaz płynny (LPG)</option>
+            <option value="CO">Tlenek węgla (CO)</option>
+            <option value="VIBRATION">Drgania</option>
+            <option value="PM">drobne cząstki stałe (PM2.5)</option>
+        </select>
+
+        <label for="alarmLevel" id="alarmLevelLabel">Poziom Alarmu:</label>
+        <input type="range" id="alarmLevel" name="alarmLevel" min="-30" max="100" step="0.1" value="0" autocomplete="off" style="display: block;">
+        <div class="range-label" id="rangeLabels">
+            <span id="minLevel">-30</span>
+            <span id="maxLevel">100</span>
+        </div>
+
+        <div class="current-level" id="currentLevel">Aktualny poziom: 0.0</div>
+
+        <!-- Checkboxy do powiadomień -->
+        <label>
+            <input type="checkbox" id="notifyByEmail"> Chcę otrzymywać powiadomienia na email
+        </label>
+        <input type="email" id="email" name="email" autocomplete="email" placeholder="Wpisz email" style="display: none;">
+
+        <label>
+            <input type="checkbox" id="notifyByPhone"> Chcę otrzymywać powiadomienia na telefon
+        </label>
+        <input type="text" id="phoneNumber" name="phoneNumber" autocomplete="tel" placeholder="Wpisz numer telefonu" style="display: none;">
+
+        <!-- Opcja robienia zdjęcia -->
+        <label>
+            <input type="checkbox" id="takePhoto"> Zrób zdjęcie przy wywołaniu alarmu
+        </label>
+
+        <button type="submit">Ustaw Alarm</button>
+    </form>
+</div>
+
+<script>
+    const alarmTypeSelect = document.getElementById('alarmType');
+    const alarmLevelInput = document.getElementById('alarmLevel');
+    const minLevelLabel = document.getElementById('minLevel');
+    const maxLevelLabel = document.getElementById('maxLevel');
+    const currentLevelDisplay = document.getElementById('currentLevel');
+    const rangeLabels = document.getElementById('rangeLabels');
+    const alarmLevelLabel = document.getElementById('alarmLevelLabel');
+
+    const notifyByEmailCheckbox = document.getElementById('notifyByEmail');
+    const emailInput = document.getElementById('email');
+    const notifyByPhoneCheckbox = document.getElementById('notifyByPhone');
+    const phoneNumberInput = document.getElementById('phoneNumber');
+
+    const takePhotoCheckbox = document.getElementById('takePhoto');
+
+    notifyByEmailCheckbox.addEventListener('change', function () {
+        emailInput.style.display = this.checked ? 'block' : 'none';
+    });
+
+    notifyByPhoneCheckbox.addEventListener('change', function () {
+        phoneNumberInput.style.display = this.checked ? 'block' : 'none';
+    });
+
+    alarmTypeSelect.addEventListener('change', function () {
+        if (this.value === 'VIBRATION') {
+            alarmLevelInput.style.display = 'none';
+            rangeLabels.style.display = 'none';
+            currentLevelDisplay.style.display = 'none'; // Ukryj "Aktualny poziom"
+            alarmLevelLabel.textContent = 'Alarm dla drgań wykrywa ich obecność.';
+        } else {
+            alarmLevelInput.style.display = 'block';
+            rangeLabels.style.display = 'flex';
+            currentLevelDisplay.style.display = 'block'; // Pokazanie aktualnego poziomu
+            alarmLevelLabel.textContent = 'Poziom Alarmu:';
+
+            switch (this.value) {
+                case 'TEMPERATURE':
+                    alarmLevelInput.min = -30;
+                    alarmLevelInput.max = 100;
+                    minLevelLabel.textContent = '-30';
+                    maxLevelLabel.textContent = '100';
+                    break;
+                case 'HUMIDITY':
+                    alarmLevelInput.min = 0;
+                    alarmLevelInput.max = 100;
+                    minLevelLabel.textContent = '0';
+                    maxLevelLabel.textContent = '100';
+                    break;
+                case 'PM':
+                    alarmLevelInput.min = 0;
+                    alarmLevelInput.max = 529;
+                    minLevelLabel.textContent = '0';
+                    maxLevelLabel.textContent = '529';
+                    break;
+                case 'LPG':
+                case 'CO':
+                    alarmLevelInput.min = 0;
+                    alarmLevelInput.max = 30000;
+                    minLevelLabel.textContent = '0';
+                    maxLevelLabel.textContent = '30000';
+                    break;
+            }
+            alarmLevelInput.value = alarmLevelInput.min;
+        }
+        updateCurrentLevel();
+    });
+
+    alarmLevelInput.addEventListener('input', updateCurrentLevel);
+
+    function updateCurrentLevel() {
+        currentLevelDisplay.textContent = `Aktualny poziom: ${parseFloat(alarmLevelInput.value).toFixed(1)}`;
+    }
+
+    document.getElementById('alarmForm').addEventListener('submit', function (event) {
+        event.preventDefault();
+
+        const alarmType = alarmTypeSelect.value;
+        const alarmValue = alarmType === 'VIBRATION' ? 0 : parseFloat(alarmLevelInput.value).toFixed(1);
+        const email = notifyByEmailCheckbox.checked ? emailInput.value : null;
+        const phoneNumber = notifyByPhoneCheckbox.checked ? phoneNumberInput.value : null;
+        const sendEmail = notifyByEmailCheckbox.checked;
+        const sendSMS = notifyByPhoneCheckbox.checked;
+        const takePhoto = takePhotoCheckbox.checked;
+
+        if (email && !email.includes('@')) {
+            Swal.fire('Błąd', 'Podaj prawidłowy adres email zawierający "@"!', 'error');
+            return;
+        }
+        if (phoneNumber && !/^\d{9}$/.test(phoneNumber)) {
+            Swal.fire('Błąd', 'Numer telefonu powinien składać się z 9 cyfr!', 'error');
+            return;
+        }
+
+        const alarmData = {
+            alarmType,
+            value: alarmValue,
+            email,
+            phoneNumber,
+            sendEmail,
+            sendSMS,
+            takePhoto
+        };
+
+        fetch('/api/alarms/create', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(alarmData)
+        })
+            .then(response => {
+                if (!response.ok) throw new Error('Problem z odpowiedzią: ' + response.status);
+                return response.json();
+            })
+            .then(data => {
+                // Tłumaczenie typu alarmu na bardziej przyjazny tekst
+                const alarmTypeText = data.alarmType === 'TEMPERATURE' ? 'Alarm dla temperatury' :
+                    data.alarmType === 'HUMIDITY' ? 'Alarm dla wilgotności' :
+                        data.alarmType === 'LPG' ? 'Alarm dla Skroplonego gazu płynnego (LPG)' :
+                            data.alarmType === 'CO' ? 'Alarm dla tlenku węgla (CO)' :
+                                data.alarmType === 'PM' ? 'Alarm dla drobnych cząstek stałych (PM2.5)' :
+                                data.alarmType === 'VIBRATION' ? 'Alarm dla drgań' :
+                                    `Alarm ${data.alarmType}`;
+
+                // Jeśli alarm jest dla drgań, nie pokazujemy poziomu
+                const alarmMessage = data.alarmType === 'VIBRATION' ? `${alarmTypeText} został ustawiony` : `${alarmTypeText} został ustawiony na poziomie ${data.value}`;
+
+                Swal.fire({
+                    title: 'Sukces!',
+                    text: alarmMessage,
+                    icon: 'success',
+                    confirmButtonText: 'OK'
+                }).then(() => {
+                    window.location.href = '/alarms';
+                });
+            })
+
+                .catch(error => {
+                console.error('Błąd podczas dodawania alarmu:', error);
+                Swal.fire({
+                    title: 'Błąd!',
+                    text: 'Wystąpił problem. Spróbuj ponownie później.',
+                    icon: 'error',
+                    confirmButtonText: 'OK'
+                });
+            });
+    });
+</script>
+
+</body>
+</html>

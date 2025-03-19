@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel Sterowania</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #121212;
+            color: #e0e0e0;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            height: 100vh;
+        }
+
+        .sidebar {
+            width: 120px;
+            height: 100%;
+            background: #1e1e1e;
+            padding: 0 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            box-sizing: border-box;
+            margin: 0;
+        }
+
+        .sidebar a {
+            display: block;
+            color: #4caf50;
+            text-decoration: none;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            transition: background 0.3s;
+        }
+
+        .sidebar a:hover {
+            background: rgba(76, 175, 80, 0.2);
+        }
+
+        .main-content {
+            flex-grow: 1;
+            padding: 20px;
+            height: calc(100vh - 40px);
+            overflow-y: auto;
+            margin-left: 20px;
+        }
+
+        /* Zmiana stylu dla powiadomień */
+        #modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6); /* Przezroczyste tło */
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        /* Styl samego okna modalnego */
+        #modal-content {
+            background-color: #1e1e1e;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            text-align: center;
+            max-width: 400px;
+            width: 100%;
+        }
+
+        #modal p {
+            font-size: 18px;
+            color: #fff;
+            margin-bottom: 20px;
+        }
+
+        #confirm-btn {
+            padding: 10px 20px;
+            font-size: 16px;
+            color: #fff;
+            background-color: #4caf50;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        #confirm-btn:hover {
+            background-color: #45a049;
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <a href="/sensor-data">Dane z Czujników</a>
+    <a href="/alarms">Alarmy</a>
+<!--    <a href="/predictions">Predykcje</a>-->
+<!--    <a href="/reports">Raporty</a>-->
+</div>
+
+<div class="main-content">
+    <div th:replace="~{${view}}"></div> <!-- Miejsce na treść dynamiczną -->
+</div>
+
+<!-- Sekcja dla powiadomień -->
+<div id="modal">
+    <div id="modal-content">
+        <p id="modal-message"></p>
+        <button id="confirm-btn">Potwierdź</button>
+    </div>
+</div>
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.5.0/sockjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+<script>
+    // Połączenie WebSocket
+    const socket = new SockJS('/ws');
+    const stompClient = Stomp.over(socket);
+
+    stompClient.connect({}, function (frame) {
+        console.log('Connected: ' + frame);
+
+        // Subskrypcja na temat powiadomień
+        stompClient.subscribe('/topic/notifications', function (notification) {
+            const msg = JSON.parse(notification.body);
+            displayNotification(msg);
+        });
+    });
+
+    function displayNotification(notification) {
+        const modal = document.getElementById('modal');
+        const modalMessage = document.getElementById('modal-message');
+
+        // Sprawdzenie typu alarmu i odpowiednie wyświetlenie wiadomości
+        let alarmTypeMessage = '';
+        if (notification.alarmType === 'TEMPERATURE') {
+            alarmTypeMessage = `Alarm ustawiony na temperaturę o wartości ${notification.value}°C`;
+        } else if (notification.alarmType === 'HUMIDITY') {
+            alarmTypeMessage = `Alarm ustawiony na wilgotność o wartości ${notification.value}%`;
+        }
+        else if (notification.alarmType === 'CO') {
+            alarmTypeMessage = `Alarm ustawiony na tlenek węgla o wartości ${notification.value}%`;
+        }
+        else if (notification.alarmType === 'LPG') {
+            alarmTypeMessage = `Alarm ustawiony na LPG o wartości ${notification.value}%`;
+        }
+        else if (notification.alarmType === 'PM') {
+            alarmTypeMessage = `Alarm ustawiony dla drobnych cząstek stałych (PM2.5) o wartości ${notification.value}%`;
+        }
+        else if (notification.alarmType === 'VIBRATION') {
+            alarmTypeMessage = `Alarm ustawiony na drgania`;
+        }
+
+        modalMessage.textContent = `${alarmTypeMessage} wystąpił o ${new Date(notification.localDateTime).toLocaleString()}.`;
+
+
+        // Wyświetlenie modala
+        modal.style.display = 'flex';
+    }
+
+    document.getElementById('confirm-btn').addEventListener('click', function() {
+        // Ukrycie modala
+        document.getElementById('modal').style.display = 'none';
+    });
+</script>
+
+</body>
+</html>

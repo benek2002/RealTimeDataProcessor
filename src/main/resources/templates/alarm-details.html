@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Szczegóły Alarmu</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #121212;
+            color: #e0e0e0;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #4caf50;
+            margin-bottom: 20px;
+        }
+
+        .alarm-details {
+            max-width: 600px;
+            margin: 0 auto;
+            background: #1e1e1e;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        }
+
+        h2, h3 {
+            color: #4caf50;
+            margin: 10px 0;
+        }
+
+        h2 {
+            border-bottom: 1px solid #4caf50;
+            padding-bottom: 10px;
+        }
+
+        .alarm-info {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #292929;
+            border-radius: 5px;
+        }
+
+        .occurrences-list {
+            margin-top: 20px;
+        }
+
+        .occurrence-item {
+            padding: 10px;
+            border-bottom: 1px solid #4caf50;
+            margin-bottom: 10px;
+        }
+
+        .occurrence-item:last-child {
+            border-bottom: none;
+        }
+
+        .contact-info {
+            font-size: 1em;
+            color: #ccc;
+        }
+
+        .contact-info div {
+            margin: 10px 0;
+        }
+
+        .no-occurrences {
+            color: #ccc;
+            text-align: center;
+        }
+
+        .view-link {
+            color: #4caf50;
+            text-decoration: none;
+        }
+
+        .view-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Szczegóły Alarmu</h1>
+
+<div class="alarm-details" id="alarm-details">
+    <!-- Szczegóły alarmu zostaną tutaj wygenerowane -->
+</div>
+
+<script>
+    // Pobranie ID alarmu z modelu serwera
+    const alarmId = [[${alarmId}]]; // Wartość alarmId przekazywana przez serwer
+
+    // Funkcja pobierająca szczegóły alarmu z backendu
+    async function fetchAlarmDetails() {
+        const response = await fetch(`/api/alarms/${alarmId}`);
+        const alarm = await response.json();
+        const alarmDetails = document.getElementById('alarm-details');
+
+        if (alarm) {
+            // Zamiana typu alarmu na czytelny tekst
+            const alarmTypeText = alarm.alarmType === 'TEMPERATURE' ? 'Alarm dla temperatury' :
+                alarm.alarmType === 'HUMIDITY' ? 'Alarm dla wilgotności' :
+                    alarm.alarmType === 'LPG' ? 'Alarm dla Skroplonego gazu płynnego (LPG)' :
+                        alarm.alarmType === 'CO' ? 'Alarm dla tlenku węgla (CO)' :
+                            alarm.alarmType === 'PM' ? 'Alarm dla drobnych cząstek stałych (PM2.5)' :
+                            alarm.alarmType === 'VIBRATION' ? 'Alarm dla drgań' :
+                            alarm.alarmType;
+
+            // Generowanie szczegółów alarmu
+            const email = alarm.email ? `<div>Email: ${alarm.email}</div>` : '';
+            const phoneNumber = alarm.phoneNumber ? `<div>Numer telefonu: ${alarm.phoneNumber}</div>` : '';
+            const takePhoto = alarm.takePhoto ? 'Tak' : 'Nie';
+
+            alarmDetails.innerHTML = `
+                <h2>${alarmTypeText}</h2>
+                <div class="alarm-info">
+                    <p>Wartość: ${alarm.value.toFixed(1)}</p>
+                    <p>Data ustawienia alarmu: ${new Date(alarm.dateOfAlarmSet).toLocaleString()}</p>
+                    <p>Robienie zdjęć: ${takePhoto}</p>
+                    <div class="contact-info">
+                        ${email}
+                        ${phoneNumber}
+                    </div>
+                </div>
+                <h3>Wystąpienia alarmu:</h3>
+                <div class="occurrences-list">
+                    ${alarm.occurrences.length > 0 ?
+                alarm.occurrences.map(occurrence => `
+                            <div class="occurrence-item">
+                                <p>Data wystąpienia: ${new Date(occurrence.localDateTime).toLocaleString()}</p>
+                                ${occurrence.imageDTO && occurrence.imageDTO.fileName ? `
+                                    <a href="api/images/${occurrence.imageDTO.fileName}" class="view-link" target="_blank">
+    Podgląd zdjęcia
+</a>
+                                ` : '<p>Brak zdjęcia.</p>'}
+                            </div>
+                        `).join('') :
+                '<p class="no-occurrences">Brak wystąpień.</p>'
+            }
+                </div>
+            `;
+        } else {
+            alarmDetails.innerHTML = '<p>Nie znaleziono szczegółów alarmu.</p>';
+        }
+    }
+
+    // Inicjalizacja pobierania szczegółów alarmu
+    fetchAlarmDetails();
+</script>
+
+</body>
+</html>

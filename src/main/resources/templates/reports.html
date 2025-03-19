@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Raporty</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #121212;
+            color: #e0e0e0;
+            margin: 0;
+            padding: 20px;
+        }
+        h2 {
+            text-align: center;
+            color: #4caf50;
+            margin-bottom: 20px;
+        }
+        .form-group {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 10px 0;
+        }
+        label {
+            margin-right: 10px;
+        }
+        select, input {
+            padding: 5px;
+            margin-right: 10px;
+            border: 1px solid #4caf50;
+            border-radius: 5px;
+            background: #292929;
+            color: #e0e0e0;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #4caf50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #388e3c;
+        }
+        #reportStats {
+            text-align: center;
+            margin: 20px 0;
+        }
+        #noDataMessage {
+            text-align: center;
+            color: #ff5722;
+            margin: 20px 0;
+            display: none; /* Domyślnie ukryte */
+        }
+        canvas {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            margin: 0 auto; /* Centruj wykres */
+        }
+    </style>
+</head>
+<body>
+
+<div>
+    <h2>Generowanie Raportów</h2>
+    <div class="form-group">
+        <label for="dataType">Wybierz typ danych:</label>
+        <select id="dataType">
+            <option value="temperature">Temperatura</option>
+            <option value="humidity">Wilgotność</option>
+        </select>
+    </div>
+    <div class="form-group">
+        <label for="reportType">Wybierz typ wykresu:</label>
+        <select id="reportType">
+            <option value="line">Wykres liniowy</option>
+            <option value="histogram">Histogram</option>
+        </select>
+    </div>
+    <div class="form-group">
+        <label for="startDate">Data początkowa:</label>
+        <input type="date" id="startDate" name="startDate">
+    </div>
+    <div class="form-group">
+        <label for="endDate">Data końcowa:</label>
+        <input type="date" id="endDate" name="endDate">
+    </div>
+    <div class="form-group">
+        <button onclick="fetchReport()">Generuj Raport</button>
+    </div>
+</div>
+
+<div id="reportStats"></div>
+<div id="noDataMessage">Nie znaleziono żadnych danych dla tego okresu.</div>
+<canvas id="reportChart" width="1000" height="600" style="display: none;"></canvas>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+    let reportChart; // Zmienna lokalna dla wykresu
+
+    async function fetchReport() {
+        const startDate = document.getElementById('startDate').value;
+        const endDate = document.getElementById('endDate').value;
+        const dataType = document.getElementById('dataType').value;
+
+        // Sprawdzanie, czy data początkowa jest późniejsza od daty końcowej
+        if (new Date(startDate) > new Date(endDate)) {
+            Swal.fire({
+                title: 'Błąd!',
+                text: 'Data początkowa nie może być późniejsza od daty końcowej.',
+                icon: 'error',
+                confirmButtonText: 'OK'
+            });
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/reports?startDate=${startDate}&endDate=${endDate}&dataType=${dataType}`);
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            const reportData = await response.json();
+            displayReport(reportData, dataType);
+        } catch (error) {
+            console.error('Błąd podczas generowania raportu:', error);
+            Swal.fire({
+                title: 'Błąd!',
+                text: 'Wystąpił błąd podczas generowania raportu. Spróbuj ponownie później.',
+                icon: 'error',
+                confirmButtonText: 'OK'
+            });
+        }
+    }
+
+    function displayReport(reportData, dataType) {
+        // Ukryj komunikat o braku danych
+        document.getElementById('noDataMessage').style.display = 'none';
+        document.getElementById('reportStats').innerHTML = ''; // Czyścimy statystyki
+        document.getElementById('reportChart').style.display = 'none'; // Ukryj wykres
+
+        const ctx = document.getElementById('reportChart').getContext('2d');
+
+        // Zniszczenie poprzedniego wykresu, jeśli istnieje
+        if (reportChart) {
+            console.log("Zniszczenie poprzedniego wykresu...");
+            reportChart.destroy();
+        }
+
+        // Ustalamy typ wykresu
+        const reportType = document.getElementById('reportType').value;
+
+        if (typeof Chart !== "undefined") {
+            if (reportData.data.length === 0) {
+                // Jeśli nie znaleziono danych
+                document.getElementById('noDataMessage').style.display = 'block'; // Pokazujemy komunikat o braku danych
+                return;
+            }
+
+            // Obliczanie i wyświetlanie statystyk
+            document.getElementById('reportStats').innerHTML = `
+                <p>Średnia wartość: ${reportData.average.toFixed(2)} ${dataType === 'temperature' ? '°C' : '%'}</p>
+                <p>Najniższa wartość: ${reportData.min.toFixed(2)} ${dataType === 'temperature' ? '°C' : '%'}</p>
+                <p>Najwyższa wartość: ${reportData.max.toFixed(2)} ${dataType === 'temperature' ? '°C' : '%'}</p>
+            `;
+
+            if (reportType === 'line') {
+                // Tworzenie wykresu liniowego
+                reportChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: reportData.data.map(d => new Date(d.timestamp).toLocaleString()), // Formatuj daty
+                        datasets: [{
+                            label: dataType === 'temperature' ? 'Temperatura (°C)' : 'Wilgotność (%)',
+                            data: reportData.data.map(d => d.value),
+                            borderColor: dataType === 'temperature' ? 'rgba(255, 99, 132, 1)' : 'rgba(54, 162, 235, 1)',
+                            backgroundColor: dataType === 'temperature' ? 'rgba(255, 99, 132, 0.2)' : 'rgba(54, 162, 235, 0.2)',
+                            fill: true,
+                            tension: 0.1,
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: 'Czas'
+                                },
+                                ticks: {
+                                    color: '#e0e0e0'
+                                }
+                            },
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: dataType === 'temperature' ? 'Temperatura (°C)' : 'Wilgotność (%)'
+                                },
+                                ticks: {
+                                    color: '#e0e0e0'
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                labels: {
+                                    color: '#e0e0e0'
+                                }
+                            }
+                        }
+                    }
+                });
+            } else if (reportType === 'histogram') {
+                // Tworzenie histogramu
+                const histogramData = {
+                    labels: reportData.data.map(d => new Date(d.timestamp).toLocaleString()),
+                    datasets: [{
+                        label: dataType === 'temperature' ? 'Temperatura (°C)' : 'Wilgotność (%)',
+                        data: reportData.data.map(d => d.value),
+                        backgroundColor: dataType === 'temperature' ? 'rgba(255, 99, 132, 0.2)' : 'rgba(54, 162, 235, 0.2)',
+                        borderColor: dataType === 'temperature' ? 'rgba(255, 99, 132, 1)' : 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1
+                    }]
+                };
+
+                const options = {
+                    responsive: true,
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Czas'
+                            },
+                            ticks: {
+                                color: '#e0e0e0'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Liczba wystąpień'
+                            },
+                            ticks: {
+                                color: '#e0e0e0'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: '#e0e0e0'
+                            }
+                        }
+                    }
+                };
+
+                reportChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: histogramData,
+                    options: options
+                });
+            }
+
+            document.getElementById('reportChart').style.display = 'block'; // Pokaż wykres
+            console.log("Wykres został pomyślnie stworzony.");
+        } else {
+            console.error("Chart jest undefined. Upewnij się, że Chart.js jest poprawnie załadowany.");
+        }
+    }
+</script>
+
+</body>
+</html>
