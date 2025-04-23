@@ -1,6 +1,11 @@
 # RealTimeDataProcessor
 RealTimeDataProcessor is a remote monitoring system for industrial environmental parameters, developed as an engineering thesis project. The system is built around a Raspberry Pi microcomputer and a set of environmental sensors. It supports real-time data acquisition, processing, visualization, anomaly detection, and predictive analytics using artificial intelligence.
 
+🎥 Video Demo
+A complete walkthrough and demonstration of the system in action is available on YouTube. 
+
+📺 Watch the demo here: [RealTimeDataProcessor - System Presentation](https://www.youtube.com/watch?v=BQ4E6mFVPqs)
+
 ### Key Features
 
 Real-time monitoring of environmental parameters (temperature, humidity, gas levels, particulate matter, vibrations)
